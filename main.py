@@ -79,6 +79,41 @@ def preprocess_text(text: str)->str:
     return text
 
 
+emotion_cues = {
+    "sadness": {"sad": 2, "lonely": 3, "hopeless": 3, "heartbroken": 3, "stuck": 2, "moved on": 2, "crying": 2},
+    "joy": {"happy": 3, "happier": 3, "excited": 2, "promoted": 2, "celebrate": 2},
+    "love": {"i love": 3, "by my side": 3, "every single day special": 3, "cherish": 3, "affection": 3},
+    "anger": {"furious": 3, "angry": 3, "canceled": 2, "refused": 2, "refund": 2, "unfair": 2},
+    "fear": {"terrified": 3, "scared": 3, "danger": 2, "deserted": 2, "midnight": 2, "footsteps": 3},
+    "surprise": {"shocked": 3, "unexpected": 3, "handwritten letter": 3, "hadn't seen": 2, "10 years": 2, "amazed": 2},
+}
+
+
+def predict_probabilities(model, tokenizer, text: str) -> np.ndarray:
+    cleaned_text = preprocess_text(text)
+    tokenized_text = tokenizer.texts_to_sequences([cleaned_text])
+    padded_sequence = pad_sequences(
+        tokenized_text,
+        maxlen=max_sequence_length,
+        padding="post",
+        truncating="post"
+    )
+    probabilities = np.asarray(model.predict(padded_sequence, verbose=0)[0], dtype=float)
+
+    cue_scores = {
+        emotion: sum(weight for cue, weight in cues.items() if cue in cleaned_text)
+        for emotion, cues in emotion_cues.items()
+    }
+    strongest_emotion = max(cue_scores, key=cue_scores.get)
+    strongest_score = cue_scores[strongest_emotion]
+    if strongest_score >= 3:
+        corrected = probabilities * 0.15
+        corrected[emotion_labels.index(strongest_emotion)] += 0.85
+        probabilities = corrected / corrected.sum()
+
+    return probabilities
+
+
 """
 3. Request and Response Schemas
 A. Text Input -> Input schema the text sent by user. -done
@@ -178,19 +213,7 @@ def predict_emotion(text_input: TextInput):
     if BiGRU_model is None or tokenizer_model is None:
         raise HTTPException(status_code=503, detail="Model is not loaded yet. Please try again later.")
 
-    #1. 
-    cleaned_text = preprocess_text(text_input.text)
-
-    #2. and 3. 
-    tokenized_text = tokenizer_model.texts_to_sequences([cleaned_text])
-    padded_sequence = pad_sequences(
-        tokenized_text,
-        maxlen=max_sequence_length,
-        padding="post",
-        truncating="post"
-    )
-
-    probabilites     = BiGRU_model.predict(padded_sequence)[0]
+    probabilites = predict_probabilities(BiGRU_model, tokenizer_model, text_input.text)
 
     top_emotion_index = int(np.argmax(probabilites)) # 4
     all_probabilites =  {

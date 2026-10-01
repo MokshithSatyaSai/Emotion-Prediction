@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from main import load_compatible_model
+from main import load_compatible_model, predict_probabilities
 
 # ---------------------------------------------------------
 # Page Setup & Configuration
@@ -257,16 +257,7 @@ with col_info_2:
 # ---------------------------------------------------------
 if (predict_clicked or selected_preset) and user_input.strip():
     with st.spinner("Analyzing semantics..."):
-        # Preprocessing
-        sequence = tokenizer.texts_to_sequences([user_input.lower()])
-        padded = pad_sequences(
-            sequence,
-            maxlen=50,
-            padding="post",
-            truncating="post"
-        )
-
-        probabilities = model.predict(padded, verbose=0)[0]
+        probabilities = predict_probabilities(model, tokenizer, user_input)
         labels = ["sadness", "joy", "love", "anger", "fear", "surprise"]
         
         top_idx = int(np.argmax(probabilities))
